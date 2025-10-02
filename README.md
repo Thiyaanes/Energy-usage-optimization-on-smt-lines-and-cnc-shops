@@ -36,3 +36,4 @@ This project is a web application for energy usage optimization. It features:
 ---
 
 For more details, see comments in `app.py` and `static/index.html`.
+ if u have any doubt contact me through thiyaanesv@gmail.com
