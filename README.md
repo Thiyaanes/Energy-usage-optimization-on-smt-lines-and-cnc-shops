@@ -1,7 +1,7 @@
 # Energy-usage-optimization-on-smt-lines-and-cnc-shops
 This is the project of Energy usage optimization on smt lines and cnc shops
 # Energy Usage Optimization on google colab
-If u want to see google colab code i have another repository called  Energy Usage Optimization on googlecolab113 on my account or i'll add it on this repo
+If u want to see google colab code i have another repository called  Energy Usage Optimization googlecolab113 on my account or i'll add it on this repo
 
  # Energy Usage Optimization Web App
 
