@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Usage Optimization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        [x-cloak] { display: none !important; }
+        .sidebar-link { transition: all 0.2s ease-in-out; }
+        .sidebar-link.disabled { opacity: 0.5; cursor: not-allowed; }
+        .sidebar-link:not(.disabled):hover { background-color: #eef2ff; color: #4338ca; }
+        .sidebar-link.active { background-color: #4f46e5; color: white; font-weight: 600; }
+        .chart-container { position: relative; width: 100%; max-width: 1000px; margin: auto; height: 450px; }
+        .kpi-card { border: 1px solid #e5e7eb; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #4f46e5; border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body x-data="appState()">
+    <div class="flex h-screen bg-gray-100">
+        <!-- Sidebar Navigation -->
+        <aside class="w-72 bg-white flex-shrink-0 flex flex-col border-r">
+            <div class="h-16 flex items-center justify-center px-4 border-b">
+                <h1 class="text-xl font-bold text-indigo-600 text-center leading-tight">Energy Usage<br>Optimization</h1>
+            </div>
+            <nav class="flex-1 p-4 space-y-2">
+                <a href="#" @click.prevent="switchTab('dashboard')" :class="{'active': activeTab === 'dashboard', 'disabled': !isModelReady}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-tachometer-alt w-6 text-center"></i><span class="ml-3">Dashboard Overview</span>
+                </a>
+                <a href="#" @click.prevent="switchTab('dataset')" :class="{'active': activeTab === 'dataset'}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-database w-6 text-center"></i><span class="ml-3">Dataset Management</span>
+                </a>
+                <a href="#" @click.prevent="switchTab('prediction_graph')" :class="{'active': activeTab === 'prediction_graph', 'disabled': !isModelReady}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-chart-line w-6 text-center"></i><span class="ml-3">Consumption Prediction</span>
+                </a>
+                <a href="#" @click.prevent="switchTab('performance_metrics')" :class="{'active': activeTab === 'performance_metrics', 'disabled': !isModelReady}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-check-double w-6 text-center"></i><span class="ml-3">Model Performance</span>
+                </a>
+                <a href="#" @click.prevent="switchTab('future_forecast')" :class="{'active': activeTab === 'future_forecast', 'disabled': !isModelReady}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-magic w-6 text-center"></i><span class="ml-3">Future Forecasting</span>
+                </a>
+                <a href="#" @click.prevent="switchTab('optimization')" :class="{'active': activeTab === 'optimization', 'disabled': !isModelReady}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-lightbulb w-6 text-center"></i><span class="ml-3">Optimization Analytics</span>
+                </a>
+                <a href="#" @click.prevent="switchTab('anomaly_detection')" :class="{'active': activeTab === 'anomaly_detection', 'disabled': !isModelReady}" class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+                    <i class="fas fa-exclamation-triangle w-6 text-center"></i><span class="ml-3">Anomaly Detection</span>
+                </a>
+            </nav>
+        </aside>
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-8">
+            <div x-show="isLoading" class="fixed inset-0 bg-white/75 flex items-center justify-center z-50">
+                <div class="flex flex-col items-center"><div class="loader"></div><p class="mt-4 font-semibold" x-text="loadingMessage"></p></div>
+            </div>
+            <!-- Connection Error Banner -->
+            <div x-show="!isBackendConnected" x-cloak class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-r-lg" role="alert">
+                <div class="flex">
+                    <div class="py-1"><i class="fas fa-exclamation-circle mr-3"></i></div>
+                    <div>
+                        <p class="font-bold">Backend Connection Failed</p>
+                        <p class="text-sm">The UI cannot connect to the Python server. Please ensure the app.py server is running before attempting to upload a dataset.</p>
+                        <button @click="checkBackendStatus" class="mt-2 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded hover:bg-red-600">Retry Connection</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Page Views -->
+            <div x-show="activeTab === 'dataset'" x-cloak>
+                <h2 class="text-3xl font-bold mb-6">Dataset Management</h2>
+                <div class="max-w-xl bg-white p-8 rounded-lg border">
+                    <form @submit.prevent="uploadAndTrain" class="space-y-6">
+                        <div>
+                            <label for="file-upload" class="block text-sm font-medium mb-2">Upload Dataset</label>
+                            <label class="mt-1 flex justify-center p-6 border-2 border-dashed rounded-md cursor-pointer">
+                                <div class="text-center">
+                                    <i class="fas fa-file-csv text-4xl text-gray-400"></i>
+                                    <p class="mt-1 text-sm" x-text="file ? file.name : 'Click to upload'"></p>
+                                </div>
+                                <input id="file-upload" type="file" class="sr-only" @change="file = $event.target.files[0]" accept=".csv">
+                            </label>
+                        </div>
+                        <button type="submit" :disabled="!file || isLoading || !isBackendConnected" class="w-full py-3 px-4 rounded-lg text-white font-medium bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400">Train Models</button>
+                    </form>
+                </div>
+            </div>
+            <div x-show="activeTab === 'dashboard'" x-cloak>
+                <h2 class="text-3xl font-bold mb-6">Dashboard Overview</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div class="kpi-card bg-white p-6 rounded-lg"><h3 class="text-gray-500">MAE</h3><p class="text-3xl font-bold mt-2" x-text="pageData.regression?.mae"></p></div>
+                    <div class="kpi-card bg-white p-6 rounded-lg"><h3 class="text-gray-500">R² Score</h3><p class="text-3xl font-bold mt-2" x-text="pageData.regression?.r2_score"></p></div>
+                    <div class="kpi-card bg-white p-6 rounded-lg"><h3 class="text-gray-500">Accuracy</h3><p class="text-3xl font-bold mt-2" x-text="pageData.classification?.accuracy"></p></div>
+                    <!--
+                    div class="kpi-card bg-white p-6 rounded-lg"><h3 class="text-gray-500">Anomaly F1-Score</h3><p class="text-3xl font-bold mt-2" x-text="pageData.anomaly_metrics?.f1_score"></p></div>
+                    -->
+                </div>
+            </div>
+            <div x-show="activeTab === 'prediction_graph'" x-cloak>
+                <h2 class="text-3xl font-bold mb-6">Consumption Prediction</h2>
+                <div class="bg-white p-6 rounded-lg border"><div class="chart-container"><canvas id="predictionChart"></canvas></div></div>
+            </div>
+            <div x-show="activeTab === 'performance_metrics'" x-cloak>
+                <h2 class="text-3xl font-bold mb-6">Model Performance</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg border">
+                        <h3 class="text-xl font-semibold mb-4">Regression Test Results</h3>
+                        <div class="space-y-2">
+                            <p><strong>Mean Absolute Error (MAE):</strong> <span x-text="pageData.regression?.mae"></span></p>
+                            <p><strong>Mean Squared Error (MSE):</strong> <span x-text="pageData.regression?.mse"></span></p>
+                            <p><strong>Root Mean Squared Error (RMSE):</strong> <span x-text="pageData.regression?.rmse"></span></p>
+                            <p><strong>R² Score:</strong> <span x-text="pageData.regression?.r2_score"></span></p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg border">
+                        <h3 class="text-xl font-semibold mb-4">Classification Metrics (High/Low)</h3>
+                        <div class="space-y-2">
+                            <p><strong>Accuracy:</strong> <span x-text="pageData.classification?.accuracy"></span></p>
+                            <p><strong>Precision:</strong> <span x-text="pageData.classification?.precision"></span></p>
+                            <p><strong>F1 Score:</strong> <span x-text="pageData.classification?.f1_score"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div x-show="activeTab === 'future_forecast'" x-cloak>
+                <h2 class="text-3xl font-bold mb-6">Future Forecasting</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg border">
+                        <h3 class="text-xl font-semibold mb-4">Future Consumption Prediction</h3>
+                        <div class="chart-container h-80"><canvas id="futureConsumptionChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg border">
+                        <h3 class="text-xl font-semibold mb-4">Future Consumption Classification</h3>
+                        <div class="chart-container h-80"><canvas id="futureClassificationChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div x-show="activeTab === 'optimization'" x-cloak>
+                <h2 class="text-3xl font-bold mb-6">Optimization Analytics</h2>
+                <div class="bg-white p-6 rounded-lg border mb-8">
+                    <h3 class="text-xl font-semibold mb-4">Energy Optimization Suggestions</h3>
+                    <ul class="list-disc pl-5 space-y-2 text-sm"><template x-for="suggestion in pageData.suggestions" :key="suggestion"><li><span x-text="suggestion"></span></li></template></ul>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg border">
+                        <h3 class="text-xl font-semibold mb-4">Average Consumption by Machine</h3>
+                        <div class="chart-container h-80"><canvas id="avgMachineChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg border">
+                        <h3 class="text-xl font-semibold mb-4">Average Consumption by Operation</h3>
+                        <div class="chart-container h-80"><canvas id="avgOperationChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+<div x-show="activeTab === 'anomaly_detection'" x-cloak>
+    <h2 class="text-3xl font-bold mb-6">Anomaly Detection</h2>
+    <!--
+    <div class="bg-white p-6 rounded-lg border mb-8">
+         <h3 class="text-xl font-semibold mb-4">Isolation Forest Evaluation Metrics</h3>
+         <div class="flex space-x-8">
+             <p><strong>Precision:</strong> <span x-text="pageData.metrics?.precision"></span></p>
+             <p><strong>Recall/Specificity:</strong> <span x-text="pageData.metrics?.recall"></span></p>
+             <p><strong>F1 Score:</strong> <span x-text="pageData.metrics?.f1_score"></span></p>
+         </div>
+    </div>
+    -->
+    <div class="bg-white p-6 rounded-lg border">
+         <h3 class="text-xl font-semibold mb-4">Energy Consumption with Anomaly Detection</h3>
+                    <div class="chart-container"><canvas id="anomalyChart"></canvas></div>
+                </div>
+            </div>
+        </main>
+    </div>
+<script>
+function appState() {
+    return {
+        activeTab: 'dataset',
+        isLoading: false,
+        loadingMessage: 'Please wait...',
+        file: null,
+        charts: {},
+        isModelReady: false,
+        isBackendConnected: false,
+        apiUrl: 'http://127.0.0.1:5001',
+        pageData: {},
+        init() {
+            this.checkBackendStatus();
+            this.$watch('activeTab', tab => this.loadDataForTab(tab));
+        },
+        async checkBackendStatus() {
+            try {
+                const response = await fetch(`${this.apiUrl}/health`);
+                this.isBackendConnected = response.ok;
+            } catch (error) {
+                this.isBackendConnected = false;
+            }
+        },
+        switchTab(tab) {
+            if (!this.isModelReady && tab !== 'dataset') {
+                alert('Please upload a dataset and train the models first.');
+                return;
+            }
+            this.activeTab = tab;
+        },
+        async loadDataForTab(tab) {
+            if (tab === 'dataset' || !this.isModelReady) return;
+            this.destroyCharts();
+            const endpointMap = {
+                dashboard: ['performance_metrics', 'anomaly_detection'],
+                prediction_graph: ['prediction_graph'],
+                performance_metrics: ['performance_metrics'],
+                future_forecast: ['future_forecast'],
+                optimization: ['optimization'],
+                anomaly_detection: ['anomaly_detection']
+            };
+            const endpoints = endpointMap[tab];
+            if (!endpoints) return;
+            this.isLoading = true;
+            this.loadingMessage = 'Fetching data...';
+            try {
+                const requests = endpoints.map(ep => fetch(`${this.apiUrl}/data/${ep}`).then(res => {
+                    if (!res.ok) throw new Error(`Failed to fetch ${ep}`);
+                    return res.json();
+                }));
+                const responses = await Promise.all(requests);
+                let combinedData = {};
+                if(tab === 'dashboard') {
+                    combinedData.regression = responses[0].regression;
+                    combinedData.classification = responses[0].classification;
+                    combinedData.anomaly_metrics = responses[1].metrics;
+                } else {
+                    combinedData = responses[0];
+                }
+                this.pageData = combinedData;
+            } catch (error) {
+                alert(`Failed to load data for this page. Please ensure the backend is running. Error: ${error.message}`);
+            } finally {
+                this.isLoading = false;
+            }
+            this.$nextTick(() => this.initializeCharts(tab));
+        },
+        destroyCharts() {
+            Object.values(this.charts).forEach(chart => chart?.destroy());
+            this.charts = {};
+        },
+        initializeCharts(tab) {
+            const baseOptions = { responsive: true, maintainAspectRatio: false };
+            if (tab === 'prediction_graph') {
+                const ctx = document.getElementById('predictionChart').getContext('2d');
+                this.charts.prediction = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: this.pageData.labels,
+                        datasets: [
+                            { label: 'Actual Energy', data: this.pageData.actual, borderColor: 'rgb(59, 130, 246)', tension: 0.1, pointRadius: 2 },
+                            { label: 'Predicted Energy', data: this.pageData.predicted, borderColor: 'rgb(239, 68, 68)', borderDash: [5, 5], tension: 0.1, pointRadius: 2 }
+                        ]
+                    }, options: baseOptions
+                });
+            } else if(tab === 'future_forecast') {
+                const consumptionCtx = document.getElementById('futureConsumptionChart').getContext('2d');
+                this.charts.futureConsumption = new Chart(consumptionCtx, {
+                    type: 'line',
+                    data: { labels: this.pageData.labels, datasets: [{ label: 'Forecasted Energy (kWh)', data: this.pageData.consumption, borderColor: 'rgb(79, 70, 229)', fill: true, backgroundColor: 'rgba(79, 70, 229, 0.1)' }] },
+                    options: baseOptions
+                });
+                const classificationCtx = document.getElementById('futureClassificationChart').getContext('2d');
+                this.charts.futureClassification = new Chart(classificationCtx, {
+                    type: 'bar',
+                    data: { labels: this.pageData.labels, datasets: [{ label: 'Energy Class (0=Low, 1=High)', data: this.pageData.classification, backgroundColor: this.pageData.classification.map(v => v === 1 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(59, 130, 246, 0.7)') }] },
+                    options: { ...baseOptions, scales: { y: { beginAtZero: true, max: 1.2, ticks: { stepSize: 1 } } } }
+                });
+            } else if (tab === 'optimization') {
+                const machineCtx = document.getElementById('avgMachineChart').getContext('2d');
+                this.charts.avgMachine = new Chart(machineCtx, { type: 'bar', data: { labels: this.pageData.avg_by_machine.labels, datasets: [{ label: 'Avg. kWh', data: this.pageData.avg_by_machine.data, backgroundColor: 'rgba(75, 192, 192, 0.7)' }] }, options: baseOptions });
+                const operationCtx = document.getElementById('avgOperationChart').getContext('2d');
+                this.charts.avgOperation = new Chart(operationCtx, { type: 'bar', data: { labels: this.pageData.avg_by_operation.labels, datasets: [{ label: 'Avg. kWh', data: this.pageData.avg_by_operation.data, backgroundColor: 'rgba(255, 159, 64, 0.7)' }] }, options: baseOptions });
+            } else if (tab === 'anomaly_detection') {
+                const ctx = document.getElementById('anomalyChart').getContext('2d');
+                const anomalyData = this.pageData.chart_data.anomaly_indices.map(index => ({
+                    x: index,
+                    y: this.pageData.chart_data.consumption[index]
+                }));
+                this.charts.anomaly = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: this.pageData.chart_data.labels,
+                        datasets: [
+                            { label: 'Energy Consumed', data: this.pageData.chart_data.consumption, borderColor: 'rgb(59, 130, 246)', pointRadius: 0 },
+                            { label: 'Anomaly', type: 'scatter', data: anomalyData, backgroundColor: 'red', radius: 5 }
+                        ]
+                    },
+                    options: baseOptions
+                });
+            }
+        },
+        async uploadAndTrain() {
+            if (!this.file) { alert('Please select a file.'); return; }
+            if (!this.isBackendConnected) {
+                alert('Cannot train model: Backend server is not connected. Please start the Python server.');
+                return;
+            }
+            this.isLoading = true;
+            this.loadingMessage = 'Training models... This may take a moment.';
+            const formData = new FormData();
+            formData.append('file', this.file);
+            try {
+                const response = await fetch(`${this.apiUrl}/upload-and-train`, { method: 'POST', body: formData });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'An unknown error occurred during training.');
+                this.isModelReady = true;
+                alert(result.message);
+                this.activeTab = 'dashboard';
+                this.loadDataForTab('dashboard');
+            } catch (error) {
+                alert(`Training failed: ${error.message}`);
+            } finally {
+                this.isLoading = false;
+                this.file = null;
+            }
+        }
+    }
+}
+    </script>
+</body>
+</html>
