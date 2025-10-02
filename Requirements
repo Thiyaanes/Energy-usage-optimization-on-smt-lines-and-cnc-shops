@@ -5,3 +5,5 @@ numpy
 scikit-learn
 tensorflow
 matplotlib
+
+run the code on app.py and index.html on vs code 
