@@ -19,7 +19,7 @@ This project is a web application for energy usage optimization. It features:
    ```
    python app.py
    ```
-3. Open your browser to [http://127.0.0.1:5001](http://127.0.0.1:5001)
+
 
 ## Project Structure
 
