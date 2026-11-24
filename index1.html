@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Usage Optimization</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+
+        .sidebar-link {
+            transition: all 0.2s ease-in-out;
+        }
+
+        .sidebar-link.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sidebar-link:not(.disabled):hover {
+            background-color: #eef2ff;
+            color: #4338ca;
+        }
+
+        .sidebar-link.active {
+            background-color: #4f46e5;
+            color: white;
+            font-weight: 600;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 1000px;
+            margin: auto;
+            height: 450px;
+        }
+
+        .kpi-card {
+            border: 1px solid #e5e7eb;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body x-data="appState()">
+
+<div class="flex h-screen bg-gray-100">
+
+    <!-- Sidebar Navigation -->
+
+    <aside class="w-72 bg-white flex-shrink-0 flex flex-col border-r">
+
+        <div class="h-16 flex items-center justify-center px-4 border-b">
+            <h1 class="text-xl font-bold text-indigo-600 text-center leading-tight">
+                Energy Usage<br>Optimization
+            </h1>
+        </div>
+
+        <nav class="flex-1 p-4 space-y-2">
+
+            <a href="#"
+               @click.prevent="switchTab('dashboard')"
+               :class="{'active': activeTab === 'dashboard', 'disabled': !isModelReady}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-tachometer-alt w-6 text-center"></i>
+                <span class="ml-3">Dashboard Overview</span>
+            </a>
+
+            <a href="#"
+               @click.prevent="switchTab('dataset')"
+               :class="{'active': activeTab === 'dataset'}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-database w-6 text-center"></i>
+                <span class="ml-3">Dataset Management</span>
+            </a>
+
+            <a href="#"
+               @click.prevent="switchTab('prediction_graph')"
+               :class="{'active': activeTab === 'prediction_graph', 'disabled': !isModelReady}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-chart-line w-6 text-center"></i>
+                <span class="ml-3">Consumption Prediction</span>
+            </a>
+
+            <a href="#"
+               @click.prevent="switchTab('performance_metrics')"
+               :class="{'active': activeTab === 'performance_metrics', 'disabled': !isModelReady}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-check-double w-6 text-center"></i>
+                <span class="ml-3">Model Performance</span>
+            </a>
+
+            <a href="#"
+               @click.prevent="switchTab('future_forecast')"
+               :class="{'active': activeTab === 'future_forecast', 'disabled': !isModelReady}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-magic w-6 text-center"></i>
+                <span class="ml-3">Future Forecasting</span>
+            </a>
+
+            <a href="#"
+               @click.prevent="switchTab('optimization')"
+               :class="{'active': activeTab === 'optimization', 'disabled': !isModelReady}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-lightbulb w-6 text-center"></i>
+                <span class="ml-3">Optimization Analytics</span>
+            </a>
+
+            <a href="#"
+               @click.prevent="switchTab('anomaly_detection')"
+               :class="{'active': activeTab === 'anomaly_detection', 'disabled': !isModelReady}"
+               class="sidebar-link flex items-center px-4 py-2.5 text-gray-600 rounded-lg">
+
+                <i class="fas fa-exclamation-triangle w-6 text-center"></i>
+                <span class="ml-3">Anomaly Detection</span>
+            </a>
+
+        </nav>
+    </aside>
+
+
+    <!-- Main Content Area -->
+
+    <main class="flex-1 overflow-y-auto p-8">
+
+        <!-- Loading Overlay -->
+
+        <div x-show="isLoading"
+             class="fixed inset-0 bg-white/75 flex items-center justify-center z-50">
+
+            <div class="flex flex-col items-center">
+
+                <div class="loader"></div>
+
+                <p class="mt-4 font-semibold" x-text="loadingMessage"></p>
+
+            </div>
+        </div>
+
+
+        <!-- Backend Connection Error -->
+
+        <div x-show="!isBackendConnected"
+             x-cloak
+             class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-r-lg"
+             role="alert">
+
+            <div class="flex">
+
+                <div class="py-1">
+                    <i class="fas fa-exclamation-circle mr-3"></i>
+                </div>
+
+                <div>
+
+                    <p class="font-bold">Backend Connection Failed</p>
+
+                    <p class="text-sm">
+                        The UI cannot connect to the Python server.
+                        Please ensure app.py is running.
+                    </p>
+
+                    <button
+                        @click="checkBackendStatus"
+                        class="mt-2 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded hover:bg-red-600">
+
+                        Retry Connection
+
+                    </button>
+
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Dataset Management -->
+
+        <div x-show="activeTab === 'dataset'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Dataset Management
+            </h2>
+
+            <div class="max-w-xl bg-white p-8 rounded-lg border">
+
+                <form @submit.prevent="uploadAndTrain" class="space-y-6">
+
+                    <div>
+
+                        <label for="file-upload"
+                               class="block text-sm font-medium mb-2">
+
+                            Upload Dataset
+
+                        </label>
+
+                        <label class="mt-1 flex justify-center p-6 border-2 border-dashed rounded-md cursor-pointer">
+
+                            <div class="text-center">
+
+                                <i class="fas fa-file-csv text-4xl text-gray-400"></i>
+
+                                <p class="mt-1 text-sm"
+                                   x-text="file ? file.name : 'Click to upload'">
+                                </p>
+
+                                <p class="text-xs text-gray-400 mt-2">
+                                    CSV files only (Maximum 10 MB)
+                                </p>
+
+                            </div>
+
+                            <input
+                                id="file-upload"
+                                type="file"
+                                class="sr-only"
+                                @change="file = $event.target.files[0]"
+                                accept=".csv">
+
+                        </label>
+
+                    </div>
+
+                    <button
+                        type="submit"
+                        :disabled="!file || isLoading || !isBackendConnected"
+                        class="w-full py-3 px-4 rounded-lg text-white font-medium bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400">
+
+                        <span x-show="!isLoading">
+                            <i class="fas fa-play mr-2"></i>
+                            Train Models
+                        </span>
+
+                        <span x-show="isLoading">
+                            Processing...
+                        </span>
+
+                    </button>
+
+                </form>
+
+
+                <!-- Training Status -->
+
+                <div x-show="trainingStatus"
+                     x-cloak
+                     class="mt-5 rounded-lg bg-indigo-50 border border-indigo-100 p-4">
+
+                    <p class="text-sm font-semibold text-indigo-900">
+                        Training Status
+                    </p>
+
+                    <p class="mt-1 text-sm text-indigo-700"
+                       x-text="trainingStatus">
+                    </p>
+
+                    <p x-show="jobId"
+                       class="mt-2 text-xs text-gray-500 break-all">
+
+                        Job ID:
+                        <span x-text="jobId"></span>
+
+                    </p>
+
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- Dashboard -->
+
+        <div x-show="activeTab === 'dashboard'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Dashboard Overview
+            </h2>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+
+                <div class="kpi-card bg-white p-6 rounded-lg">
+
+                    <h3 class="text-gray-500">MAE</h3>
+
+                    <p class="text-3xl font-bold mt-2"
+                       x-text="pageData.regression?.mae">
+                    </p>
+
+                </div>
+
+                <div class="kpi-card bg-white p-6 rounded-lg">
+
+                    <h3 class="text-gray-500">R² Score</h3>
+
+                    <p class="text-3xl font-bold mt-2"
+                       x-text="pageData.regression?.r2_score">
+                    </p>
+
+                </div>
+
+                <div class="kpi-card bg-white p-6 rounded-lg">
+
+                    <h3 class="text-gray-500">Accuracy</h3>
+
+                    <p class="text-3xl font-bold mt-2"
+                       x-text="pageData.classification?.accuracy">
+                    </p>
+
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- Prediction Graph -->
+
+        <div x-show="activeTab === 'prediction_graph'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Consumption Prediction
+            </h2>
+
+            <div class="bg-white p-6 rounded-lg border">
+
+                <div class="chart-container">
+
+                    <canvas id="predictionChart"></canvas>
+
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- Performance Metrics -->
+
+        <div x-show="activeTab === 'performance_metrics'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Model Performance
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <div class="bg-white p-6 rounded-lg border">
+
+                    <h3 class="text-xl font-semibold mb-4">
+                        Regression Test Results
+                    </h3>
+
+                    <div class="space-y-2">
+
+                        <p>
+                            <strong>Mean Absolute Error (MAE):</strong>
+                            <span x-text="pageData.regression?.mae"></span>
+                        </p>
+
+                        <p>
+                            <strong>Mean Squared Error (MSE):</strong>
+                            <span x-text="pageData.regression?.mse"></span>
+                        </p>
+
+                        <p>
+                            <strong>Root Mean Squared Error (RMSE):</strong>
+                            <span x-text="pageData.regression?.rmse"></span>
+                        </p>
+
+                        <p>
+                            <strong>R² Score:</strong>
+                            <span x-text="pageData.regression?.r2_score"></span>
+                        </p>
+
+                    </div>
+                </div>
+
+
+                <div class="bg-white p-6 rounded-lg border">
+
+                    <h3 class="text-xl font-semibold mb-4">
+                        Classification Metrics (High/Low)
+                    </h3>
+
+                    <div class="space-y-2">
+
+                        <p>
+                            <strong>Accuracy:</strong>
+                            <span x-text="pageData.classification?.accuracy"></span>
+                        </p>
+
+                        <p>
+                            <strong>Precision:</strong>
+                            <span x-text="pageData.classification?.precision"></span>
+                        </p>
+
+                        <p>
+                            <strong>Recall:</strong>
+                            <span x-text="pageData.classification?.recall"></span>
+                        </p>
+
+                        <p>
+                            <strong>F1 Score:</strong>
+                            <span x-text="pageData.classification?.f1_score"></span>
+                        </p>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- Future Forecast -->
+
+        <div x-show="activeTab === 'future_forecast'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Future Forecasting
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <div class="bg-white p-6 rounded-lg border">
+
+                    <h3 class="text-xl font-semibold mb-4">
+                        Future Consumption Prediction
+                    </h3>
+
+                    <div class="chart-container h-80">
+
+                        <canvas id="futureConsumptionChart"></canvas>
+
+                    </div>
+
+                </div>
+
+
+                <div class="bg-white p-6 rounded-lg border">
+
+                    <h3 class="text-xl font-semibold mb-4">
+                        Future Consumption Classification
+                    </h3>
+
+                    <div class="chart-container h-80">
+
+                        <canvas id="futureClassificationChart"></canvas>
+
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- Optimization Analytics -->
+
+        <div x-show="activeTab === 'optimization'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Optimization Analytics
+            </h2>
+
+            <div class="bg-white p-6 rounded-lg border mb-8">
+
+                <h3 class="text-xl font-semibold mb-4">
+                    Energy Optimization Suggestions
+                </h3>
+
+                <ul class="list-disc pl-5 space-y-2 text-sm">
+
+                    <template x-for="suggestion in pageData.suggestions"
+                              :key="suggestion">
+
+                        <li>
+                            <span x-text="suggestion"></span>
+                        </li>
+
+                    </template>
+
+                </ul>
+
+            </div>
+
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <div class="bg-white p-6 rounded-lg border">
+
+                    <h3 class="text-xl font-semibold mb-4">
+                        Average Consumption by Machine
+                    </h3>
+
+                    <div class="chart-container h-80">
+
+                        <canvas id="avgMachineChart"></canvas>
+
+                    </div>
+
+                </div>
+
+
+                <div class="bg-white p-6 rounded-lg border">
+
+                    <h3 class="text-xl font-semibold mb-4">
+                        Average Consumption by Operation
+                    </h3>
+
+                    <div class="chart-container h-80">
+
+                        <canvas id="avgOperationChart"></canvas>
+
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- Anomaly Detection -->
+
+        <div x-show="activeTab === 'anomaly_detection'" x-cloak>
+
+            <h2 class="text-3xl font-bold mb-6">
+                Anomaly Detection
+            </h2>
+
+            <div class="bg-white p-6 rounded-lg border">
+
+                <h3 class="text-xl font-semibold mb-4">
+                    Energy Consumption with Anomaly Detection
+                </h3>
+
+                <div class="chart-container">
+
+                    <canvas id="anomalyChart"></canvas>
+
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+</div>
+
+
+<!-- JavaScript -->
+
+<script>
+
+function appState() {
+
+    return {
+
+        activeTab: 'dataset',
+
+        isLoading: false,
+
+        loadingMessage: 'Please wait...',
+
+        file: null,
+
+        charts: {},
+
+        isModelReady: false,
+
+        isBackendConnected: false,
+
+        apiUrl: window.location.protocol === 'file:'
+            ? 'http://127.0.0.1:5001'
+            : window.location.origin,
+
+        pageData: {},
+
+        jobId: null,
+
+        trainingStatus: '',
+
+        polling: false,
+
+
+        // ------------------------------------------
+        // INITIALIZATION
+        // ------------------------------------------
+
+        init() {
+
+            this.checkBackendStatus();
+
+        },
+
+
+        // ------------------------------------------
+        // API REQUEST HANDLER
+        // ------------------------------------------
+
+        async apiFetch(path, options = {}) {
+
+            const response = await fetch(
+                `${this.apiUrl}${path}`,
+                options
+            );
+
+            let body = {};
+
+            try {
+
+                body = await response.json();
+
+            } catch (_) {
+
+                body = {};
+
+            }
+
+            if (!response.ok) {
+
+                throw new Error(
+                    body.error || `Request failed (${response.status})`
+                );
+
+            }
+
+            return body;
+
+        },
+
+
+        // ------------------------------------------
+        // BACKEND CONNECTION
+        // ------------------------------------------
+
+        async checkBackendStatus() {
+
+            try {
+
+                await this.apiFetch('/health');
+
+                this.isBackendConnected = true;
+
+            } catch (error) {
+
+                this.isBackendConnected = false;
+
+            }
+
+        },
+
+
+        // ------------------------------------------
+        // TAB SWITCHING
+        // ------------------------------------------
+
+        async switchTab(tab) {
+
+            if (!this.isModelReady && tab !== 'dataset') {
+
+                alert(
+                    'Please upload a dataset and complete model training first.'
+                );
+
+                return;
+
+            }
+
+            this.activeTab = tab;
+
+            if (tab !== 'dataset') {
+
+                await this.$nextTick();
+
+                await this.loadDataForTab(tab);
+
+            }
+
+        },
+
+
+        // ------------------------------------------
+        // LOAD DATA FOR SELECTED TAB
+        // ------------------------------------------
+
+        async loadDataForTab(tab) {
+
+            if (
+                tab === 'dataset' ||
+                !this.isModelReady ||
+                !this.jobId
+            ) {
+
+                return;
+
+            }
+
+            const endpointMap = {
+
+                dashboard: '/data/dashboard',
+
+                prediction_graph: '/data/prediction_graph',
+
+                performance_metrics: '/data/performance_metrics',
+
+                future_forecast: '/data/future_forecast',
+
+                optimization: '/data/optimization',
+
+                anomaly_detection: '/data/anomaly_detection'
+
+            };
+
+            const endpoint = endpointMap[tab];
+
+            if (!endpoint) return;
+
+            this.destroyCharts();
+
+            this.isLoading = true;
+
+            this.loadingMessage = 'Fetching results...';
+
+            try {
+
+                const query = new URLSearchParams({
+                    job_id: this.jobId
+                });
+
+                this.pageData = await this.apiFetch(
+                    `${endpoint}?${query.toString()}`
+                );
+
+                await this.$nextTick();
+
+                this.initializeCharts(tab);
+
+            } catch (error) {
+
+                alert(
+                    `Unable to load ${tab.replaceAll('_', ' ')}: ${error.message}`
+                );
+
+            } finally {
+
+                this.isLoading = false;
+
+            }
+
+        },
+
+
+        // ------------------------------------------
+        // DESTROY OLD CHARTS
+        // ------------------------------------------
+
+        destroyCharts() {
+
+            Object.values(this.charts).forEach(chart => {
+
+                if (chart) chart.destroy();
+
+            });
+
+            this.charts = {};
+
+        },
+
+
+        // ------------------------------------------
+        // INITIALIZE CHARTS
+        // ------------------------------------------
+
+        initializeCharts(tab) {
+
+            const baseOptions = {
+
+                responsive: true,
+
+                maintainAspectRatio: false
+
+            };
+
+
+            // Prediction Chart
+
+            if (tab === 'prediction_graph') {
+
+                const canvas = document.getElementById(
+                    'predictionChart'
+                );
+
+                if (!canvas) return;
+
+                this.charts.prediction = new Chart(
+                    canvas.getContext('2d'),
+                    {
+
+                        type: 'line',
+
+                        data: {
+
+                            labels: this.pageData.labels,
+
+                            datasets: [
+
+                                {
+                                    label: 'Actual Energy',
+
+                                    data: this.pageData.actual,
+
+                                    borderColor: 'rgb(59, 130, 246)',
+
+                                    tension: 0.1,
+
+                                    pointRadius: 2
+                                },
+
+                                {
+                                    label: 'Predicted Energy',
+
+                                    data: this.pageData.predicted,
+
+                                    borderColor: 'rgb(239, 68, 68)',
+
+                                    borderDash: [5, 5],
+
+                                    tension: 0.1,
+
+                                    pointRadius: 2
+                                }
+
+                            ]
+
+                        },
+
+                        options: baseOptions
+
+                    }
+                );
+
+            }
+
+
+            // Future Forecast Charts
+
+            else if (tab === 'future_forecast') {
+
+                const consumptionCanvas = document.getElementById(
+                    'futureConsumptionChart'
+                );
+
+                const classificationCanvas = document.getElementById(
+                    'futureClassificationChart'
+                );
+
+                if (!consumptionCanvas || !classificationCanvas) return;
+
+
+                this.charts.futureConsumption = new Chart(
+                    consumptionCanvas.getContext('2d'),
+                    {
+
+                        type: 'line',
+
+                        data: {
+
+                            labels: this.pageData.labels,
+
+                            datasets: [
+
+                                {
+                                    label: 'Forecasted Energy (kWh)',
+
+                                    data: this.pageData.consumption,
+
+                                    borderColor: 'rgb(79, 70, 229)',
+
+                                    fill: true,
+
+                                    backgroundColor: 'rgba(79, 70, 229, 0.1)'
+                                }
+
+                            ]
+
+                        },
+
+                        options: baseOptions
+
+                    }
+                );
+
+
+                this.charts.futureClassification = new Chart(
+                    classificationCanvas.getContext('2d'),
+                    {
+
+                        type: 'bar',
+
+                        data: {
+
+                            labels: this.pageData.labels,
+
+                            datasets: [
+
+                                {
+                                    label: 'Energy Class (0=Low, 1=High)',
+
+                                    data: this.pageData.classification,
+
+                                    backgroundColor: this.pageData.classification.map(
+                                        value => value === 1
+                                            ? 'rgba(239, 68, 68, 0.7)'
+                                            : 'rgba(59, 130, 246, 0.7)'
+                                    )
+
+                                }
+
+                            ]
+
+                        },
+
+                        options: {
+
+                            ...baseOptions,
+
+                            scales: {
+
+                                y: {
+
+                                    beginAtZero: true,
+
+                                    max: 1.2,
+
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+                    }
+                );
+
+            }
+
+
+            // Optimization Charts
+
+            else if (tab === 'optimization') {
+
+                const machineCanvas = document.getElementById(
+                    'avgMachineChart'
+                );
+
+                const operationCanvas = document.getElementById(
+                    'avgOperationChart'
+                );
+
+                if (!machineCanvas || !operationCanvas) return;
+
+
+                this.charts.avgMachine = new Chart(
+                    machineCanvas.getContext('2d'),
+                    {
+
+                        type: 'bar',
+
+                        data: {
+
+                            labels: this.pageData.avg_by_machine.labels,
+
+                            datasets: [
+
+                                {
+                                    label: 'Avg. kWh',
+
+                                    data: this.pageData.avg_by_machine.data,
+
+                                    backgroundColor: 'rgba(75, 192, 192, 0.7)'
+                                }
+
+                            ]
+
+                        },
+
+                        options: baseOptions
+
+                    }
+                );
+
+
+                this.charts.avgOperation = new Chart(
+                    operationCanvas.getContext('2d'),
+                    {
+
+                        type: 'bar',
+
+                        data: {
+
+                            labels: this.pageData.avg_by_operation.labels,
+
+                            datasets: [
+
+                                {
+                                    label: 'Avg. kWh',
+
+                                    data: this.pageData.avg_by_operation.data,
+
+                                    backgroundColor: 'rgba(255, 159, 64, 0.7)'
+                                }
+
+                            ]
+
+                        },
+
+                        options: baseOptions
+
+                    }
+                );
+
+            }
+
+
+            // Anomaly Detection Chart
+
+            else if (tab === 'anomaly_detection') {
+
+                const canvas = document.getElementById(
+                    'anomalyChart'
+                );
+
+                if (!canvas) return;
+
+                const chartData = this.pageData.chart_data;
+
+                const anomalyData = chartData.anomaly_indices.map(
+                    index => ({
+
+                        x: index,
+
+                        y: chartData.consumption[index]
+
+                    })
+                );
+
+
+                this.charts.anomaly = new Chart(
+                    canvas.getContext('2d'),
+                    {
+
+                        type: 'line',
+
+                        data: {
+
+                            labels: chartData.labels,
+
+                            datasets: [
+
+                                {
+                                    label: 'Energy Consumed',
+
+                                    data: chartData.consumption,
+
+                                    borderColor: 'rgb(59, 130, 246)',
+
+                                    pointRadius: 0
+                                },
+
+                                {
+                                    label: 'Anomaly',
+
+                                    type: 'scatter',
+
+                                    data: anomalyData,
+
+                                    backgroundColor: 'red',
+
+                                    pointRadius: 5
+                                }
+
+                            ]
+
+                        },
+
+                        options: baseOptions
+
+                    }
+                );
+
+            }
+
+        },
+
+
+        // ------------------------------------------
+        // BACKGROUND TRAINING STATUS POLLING
+        // ------------------------------------------
+
+        async waitForTraining(jobId) {
+
+            this.polling = true;
+
+            const startedAt = Date.now();
+
+            const timeoutMs = 30 * 60 * 1000;
+
+            try {
+
+                while (Date.now() - startedAt < timeoutMs) {
+
+                    const job = await this.apiFetch(
+                        `/jobs/${encodeURIComponent(jobId)}`
+                    );
+
+                    this.trainingStatus = job.status;
+
+
+                    if (job.status === 'completed') {
+
+                        this.polling = false;
+
+                        return;
+
+                    }
+
+
+                    if (job.status === 'failed') {
+
+                        throw new Error(
+                            job.error || 'Model training failed.'
+                        );
+
+                    }
+
+
+                    this.loadingMessage = job.status === 'running'
+                        ? 'Training models... Please wait.'
+                        : 'Your training job is queued...';
+
+
+                    await new Promise(
+                        resolve => setTimeout(resolve, 2000)
+                    );
+
+                }
+
+
+                throw new Error(
+                    'Training is taking longer than expected. Check the job status and try again.'
+                );
+
+            } finally {
+
+                this.polling = false;
+
+            }
+
+        },
+
+
+        // ------------------------------------------
+        // UPLOAD AND TRAIN
+        // ------------------------------------------
+
+        async uploadAndTrain() {
+
+            if (!this.file) {
+
+                alert('Please select a CSV file.');
+
+                return;
+
+            }
+
+
+            if (!this.isBackendConnected) {
+
+                await this.checkBackendStatus();
+
+                if (!this.isBackendConnected) {
+
+                    alert(
+                        'Cannot train: the backend server is not connected.'
+                    );
+
+                    return;
+
+                }
+
+            }
+
+
+            if (!this.file.name.toLowerCase().endsWith('.csv')) {
+
+                alert('Please select a CSV file.');
+
+                return;
+
+            }
+
+
+            if (this.file.size > 10 * 1024 * 1024) {
+
+                alert('The maximum file size is 10 MB.');
+
+                return;
+
+            }
+
+
+            this.isLoading = true;
+
+            this.loadingMessage = 'Uploading dataset...';
+
+            this.trainingStatus = 'submitting';
+
+            this.isModelReady = false;
+
+            this.jobId = null;
+
+            this.pageData = {};
+
+            this.destroyCharts();
+
+
+            const formData = new FormData();
+
+            formData.append('file', this.file);
+
+
+            try {
+
+                // Submit training job
+
+                const result = await this.apiFetch(
+                    '/upload-and-train',
+                    {
+
+                        method: 'POST',
+
+                        body: formData
+
+                    }
+                );
+
+
+                // Save returned job ID
+
+                this.jobId = result.job_id;
+
+                this.trainingStatus = result.status || 'queued';
+
+                this.loadingMessage = 'Training models... Please wait.';
+
+
+                // Poll backend until training completes
+
+                await this.waitForTraining(this.jobId);
+
+
+                // Training completed
+
+                this.isModelReady = true;
+
+                this.trainingStatus = 'completed';
+
+                this.activeTab = 'dashboard';
+
+
+                // Load dashboard
+
+                await this.$nextTick();
+
+                await this.loadDataForTab('dashboard');
+
+
+                alert(
+                    'Model training completed successfully!'
+                );
+
+            } catch (error) {
+
+                this.trainingStatus = 'failed';
+
+                this.isModelReady = false;
+
+                alert(
+                    `Training failed: ${error.message}`
+                );
+
+            } finally {
+
+                this.isLoading = false;
+
+                this.file = null;
+
+                const input = document.getElementById(
+                    'file-upload'
+                );
+
+                if (input) input.value = '';
+
+            }
+
+        }
+
+    };
+
+}
+
+</script>
+
+</body>
+</html>
